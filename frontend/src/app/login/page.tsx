@@ -152,14 +152,14 @@ function LoginFormFallback() {
   return (
     <div className="w-full max-w-md">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 animate-pulse">
-        <div className="h-8 w-48 mx-auto bg-slate-800 rounded mb-8</div>
+        <div className="h-8 w-48 mx-auto bg-slate-800 rounded mb-8" />
         <div className="space-y-5">
-          <div className="h-12 bg-slate-800 rounded-lg</div>
-          <div className="h-12 bg-slate-800 rounded-lg</div>
-          <div className="h-12 bg-slate-800 rounded-lg</div>
-       </div>
-     </div>
-   </div>
+          <div className="h-12 bg-slate-800 rounded-lg" />
+          <div className="h-12 bg-slate-800 rounded-lg" />
+          <div className="h-12 bg-slate-800 rounded-lg" />
+        </div>
+      </div>
+    </div>
   );
 }
 
