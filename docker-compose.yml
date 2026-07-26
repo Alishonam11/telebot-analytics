@@ -1,0 +1,101 @@
+# ===================================================================
+# TeleBot Analytics — full-stack local orchestration
+#   backend  : Express + TypeScript + Prisma  (repo root, EXPOSE 3000)
+#   frontend : Next.js 14 standalone         (./frontend, EXPOSE 3001)
+#   db       : PostgreSQL 16
+#
+#   docker compose up -d --build
+#   docker compose down -v          # tear down + drop volumes
+# ===================================================================
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: telebot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-telebot_analytics}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-telebot_analytics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - telebot_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telebot_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-telebot_analytics}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-replace-this-with-a-strong-random-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - backend_node_modules:/app/node_modules
+    networks:
+      - telebot_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: telebot_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${FRONTEND_PORT:-3001}:3001"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - frontend_node_modules:/app/node_modules
+    networks:
+      - telebot_net
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_node_modules:
+    driver: local
+  frontend_node_modules:
+    driver: local
+
+networks:
+  telebot_net:
+    driver: bridge

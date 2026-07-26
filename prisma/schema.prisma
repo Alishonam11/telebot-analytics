@@ -1,0 +1,191 @@
+// Prisma Schema for TeleBot Analytics
+// Core models: User, Bot, Event, Session, Funnel, Retention
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  avatarUrl     String?
+  plan          Plan      @default(FREE)
+  isActive      Boolean   @default(true)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  bots          Bot[]
+  apiKeys       ApiKey[]
+  sessions      Session[]
+
+  @@index([email])
+  @@index([plan])
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  name        String
+  keyHash     String   @unique
+  keyPrefix   String   // First 8 chars for display
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  @@index([userId])
+  @@index([keyHash])
+}
+
+model Bot {
+  id              String   @id @default(uuid())
+  name            String
+  username        String   // @botusername
+  tokenHash       String   @unique // Encrypted bot token
+  tokenPrefix     String   // First 10 chars for display
+  webhookSecret   String   @unique @default(uuid())
+  webhookUrl      String?
+  isActive        Boolean  @default(true)
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastEventAt     DateTime?
+
+  events          Event[]
+  sessions        Session[]
+  funnels         Funnel[]
+
+  @@index([ownerId])
+  @@index([webhookSecret])
+  @@index([username])
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  botId       String
+  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  userId      String   // Telegram user ID (as string)
+  username    String?
+  firstName   String?
+  lastName    String?
+  languageCode String?
+  eventType   EventType
+  eventName   String   // e.g., "message", "callback_query", "command_start"
+  payload     Json?    // Full Telegram update object
+  metadata    Json?    // Custom properties
+  timestamp   DateTime @default(now())
+  sessionId   String?
+
+  @@index([botId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@index([botId, timestamp])
+  @@index([botId, eventType])
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  botId       String
+  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  userId      String   // Telegram user ID
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  duration    Int?     // seconds
+  eventCount  Int      @default(0)
+  isActive    Boolean  @default(true)
+  metadata    Json?
+
+  @@index([botId])
+  @@index([userId])
+  @@index([startedAt])
+  @@index([botId, startedAt])
+}
+
+model Funnel {
+  id          String        @id @default(uuid())
+  botId       String
+  bot         Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
+  name        String
+  steps       Json          // Array of { eventName: string, label: string }
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  funnelEvents FunnelEvent[]
+
+  @@index([botId])
+}
+
+model FunnelEvent {
+  id          String   @id @default(uuid())
+  funnelId    String
+  funnel      Funnel   @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  userId      String
+  stepIndex   Int      // Which step in the funnel (0-based)
+  eventName   String
+  timestamp   DateTime @default(now())
+  metadata    Json?
+
+  @@index([funnelId])
+  @@index([userId])
+  @@index([funnelId, stepIndex])
+  @@unique([funnelId, userId, stepIndex]) // One entry per user per step
+}
+
+model RetentionCohort {
+  id          String   @id @default(uuid())
+  botId       String
+  cohortDate  DateTime @db.Date // Date of cohort (e.g., 2024-01-15)
+  period      RetentionPeriod @default(DAY)
+  totalUsers  Int      @default(0)
+  retained    Json     // { "1": 45, "2": 32, "3": 28, ... } - day -> count
+  createdAt   DateTime @default(now())
+
+  @@unique([botId, cohortDate, period])
+  @@index([botId])
+  @@index([cohortDate])
+}
+
+enum EventType {
+  MESSAGE
+  CALLBACK_QUERY
+  INLINE_QUERY
+  CHOSEN_INLINE_RESULT
+  COMMAND
+  EDITED_MESSAGE
+  CHANNEL_POST
+  EDITED_CHANNEL_POST
+  POLL
+  POLL_ANSWER
+  MY_CHAT_MEMBER
+  CHAT_MEMBER
+  CHAT_JOIN_REQUEST
+  CUSTOM
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum RetentionPeriod {
+  DAY
+  WEEK
+  MONTH
+}
