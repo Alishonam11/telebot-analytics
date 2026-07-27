@@ -23,7 +23,12 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 app.use(cors({
-  origin: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  origin: [
+    'http://localhost:3001',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL || '',
+    process.env.NEXT_PUBLIC_API_URL || '',
+  ].filter(Boolean),
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));

@@ -44,7 +44,7 @@ export function getInitials(name?: string | null): string {
 }
 
 export const api = async <T>(path: string, options?: RequestInit): Promise<T> => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  const baseUrl = 'http://localhost:3000';
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
   
   const res = await fetch(`${baseUrl}${path}`, {
